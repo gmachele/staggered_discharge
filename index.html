@@ -47,7 +47,11 @@ header p { font-size: 0.82rem; opacity: 0.8; margin-top: 4px; }
 .remove-btn { background: none; border: none; cursor: pointer; font-size: 1.2rem; color: #c0392b; padding: 0; line-height: 1; }
 .remove-btn:hover { color: #922b21; }
 
-/* Mobile: each group becomes a card */
+/* Desktop: gf wrappers are transparent (children go directly into grid) */
+.gf { display: contents; }
+.gl { display: none; }
+
+/* Mobile: each group becomes a labeled card */
 @media (max-width: 600px) {
   .groups-header { display: none; }
   .group-row {
@@ -60,11 +64,12 @@ header p { font-size: 0.82rem; opacity: 0.8; margin-top: 4px; }
     margin-bottom: 8px;
     border-top: 1px solid #ddd !important;
   }
-  .group-row > div:first-child { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+  .color-cell { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+  .gf { display: flex; flex-direction: column; gap: 3px; }
+  .gl { display: block; font-size: 0.65rem; font-weight: bold; color: #666; text-transform: uppercase; letter-spacing: 0.03em; }
   .group-row > span { display: none; }
-  .group-row input { font-size: 1rem; padding: 9px 8px; }
-  .group-row button { grid-column: 1 / -1; justify-self: end; }
-  /* Add data-label pseudo-labels via wrapper in JS */
+  .group-row input { font-size: 1rem; padding: 9px 8px; width: 100%; }
+  .group-row .remove-btn { grid-column: 1 / -1; justify-self: end; }
 }
 
 .btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; align-items: center; }
@@ -121,6 +126,7 @@ button.secondary:hover { background: #5a6268; }
   .chart-wrapper { height: 200px; }
   .summary, .result-bar { padding: 10px 12px; }
   .legend-row { padding: 8px 12px; }
+  .field.w120, .field.w160 { min-width: 0; max-width: 100%; }
 }
 </style>
 </head>
@@ -182,12 +188,17 @@ button.secondary:hover { background: #5a6268; }
         <option value="time">Time [s]</option>
         <option value="flood">Flooding Ratio [%]</option>
         <option value="mass">Total Mass Remaining [kg]</option>
+        <option value="cylPres">Cylinder Pressure [barg]</option>
       </select>
     </div>
     <div class="lookup-field">
       <label id="lookupLabel">Value</label>
       <input type="number" id="lookupValue" placeholder="Enter a value…" step="any"
              onkeydown="if(event.key==='Enter') doLookup()" />
+    </div>
+    <div class="lookup-field" id="groupSelectWrap" style="display:none">
+      <label>Which Group</label>
+      <select id="lookupGroup"></select>
     </div>
     <div style="display:flex;gap:10px;align-items:flex-end">
       <button class="primary" onclick="doLookup()">Look up ▶</button>
@@ -200,6 +211,9 @@ button.secondary:hover { background: #5a6268; }
 <div class="result-bar" id="resultBar">
   <div class="result-item" id="res_time">
     <div class="r-label">Time</div><div class="r-value" id="val_time">—</div>
+  </div>
+  <div class="result-item" id="res_cylPres">
+    <div class="r-label">Cylinder Pressure</div><div class="r-value" id="val_cylPres">—</div>
   </div>
   <div class="result-item" id="res_flow">
     <div class="r-label">Outlet Flow</div><div class="r-value" id="val_flow">—</div>
@@ -311,7 +325,7 @@ function bisect(fn, target, tLow, tHigh, iters=60) {
 }
 
 // ── Group management ──
-function addGroup(startTime=0, nCyl=1, massPerCyl=33, pres=300, label='') {
+function addGroup(startTime=0, nCyl=1, massPerCyl=33.14, pres=300, label='') {
   const id = groupId++;
   const color = PALETTE[groups.length % PALETTE.length];
   groups.push({ id, startTime, nCyl, massPerCyl, pres, color, label: label || `Group ${groups.length+1}` });
@@ -324,21 +338,18 @@ function removeGroup(id) {
 function renderGroupRows() {
   const container = document.getElementById('groupRows');
   container.innerHTML = '';
+  const sel = document.getElementById('lookupGroup');
+  sel.innerHTML = groups.map((g, i) => `<option value="${i}">${g.label}</option>`).join('');
   groups.forEach((g, idx) => {
     const row = document.createElement('div');
     row.className = 'group-row';
     row.innerHTML = `
-      <div><div class="color-dot" style="background:${g.color}"></div></div>
-      <input type="number" value="${g.startTime}" min="0" step="1"
-             onchange="groups[${idx}].startTime=parseFloat(this.value)||0" />
-      <input type="number" value="${g.nCyl}" min="1" max="20" step="1"
-             onchange="groups[${idx}].nCyl=parseInt(this.value)||1" />
-      <input type="number" value="${g.massPerCyl}" min="1" step="0.5"
-             onchange="groups[${idx}].massPerCyl=parseFloat(this.value)||33" />
-      <input type="number" value="${g.pres}" min="50" max="400" step="5"
-             onchange="groups[${idx}].pres=parseFloat(this.value)||300" />
-      <input type="text" value="${g.label}" maxlength="20"
-             onchange="groups[${idx}].label=this.value" />
+      <div class="color-cell"><div class="color-dot" style="background:${g.color}"></div></div>
+      <div class="gf"><span class="gl">Start [s]</span><input type="number" value="${g.startTime}" min="0" step="1" onchange="groups[${idx}].startTime=parseFloat(this.value)||0" /></div>
+      <div class="gf"><span class="gl">Cylinders</span><input type="number" value="${g.nCyl}" min="1" max="20" step="1" onchange="groups[${idx}].nCyl=parseInt(this.value)||1" /></div>
+      <div class="gf"><span class="gl">Mass/cyl [kg]</span><input type="number" value="${g.massPerCyl}" min="1" step="0.5" onchange="groups[${idx}].massPerCyl=parseFloat(this.value)||33" /></div>
+      <div class="gf"><span class="gl">Pressure [barg]</span><input type="number" value="${g.pres}" min="50" max="400" step="5" onchange="groups[${idx}].pres=parseFloat(this.value)||300" /></div>
+      <div class="gf"><span class="gl">Label</span><input type="text" value="${g.label}" maxlength="20" onchange="groups[${idx}].label=this.value" /></div>
       <span></span>
       <button class="remove-btn" onclick="removeGroup(${g.id})" title="Remove">✕</button>
     `;
@@ -504,15 +515,17 @@ function calculate() {
 
 // ── Lookup ──
 const PARAM_LABELS = {
-  time:  'Time (0 – ? s)',
-  flood: 'Flooding Ratio (0 – 100 %)',
-  mass:  'Total Mass Remaining (kg)',
+  time:    'Time (0 – ? s)',
+  flood:   'Flooding Ratio (0 – 100 %)',
+  mass:    'Total Mass Remaining (kg)',
+  cylPres: 'Cylinder Pressure (barg)',
 };
 
 function onParamChange() {
   const p = document.getElementById('lookupParam').value;
   document.getElementById('lookupLabel').textContent = PARAM_LABELS[p] || 'Value';
   document.getElementById('lookupValue').value = '';
+  document.getElementById('groupSelectWrap').style.display = (p === 'cylPres') ? '' : 'none';
   clearLookup();
 }
 
@@ -526,12 +539,21 @@ function solveT(param, val) {
       if (val <= 0) return 0;
       if (val >= totalFlood(tEnd)) return null; // unreachable
       return bisect(totalFlood, val, 0, tEnd);
-    case 'mass':
+    case 'mass': {
       // monotonically decreasing; mass(0)=totalM0, mass(tEnd)≈0
       const m0 = groups.reduce((s,g) => s + g.nCyl*g.massPerCyl, 0);
       if (val >= m0) return 0;
       if (val <= 0)  return tEnd;
       return bisect(totalMass, val, 0, tEnd);
+    }
+    case 'cylPres': {
+      const gi = parseInt(document.getElementById('lookupGroup').value) || 0;
+      const g = groups[gi];
+      if (!g || val <= 0 || val > g.pres) return null;
+      const ratio = g.nCyl / STATE.F;
+      const tl = -ratio / BASE.k_pres * Math.log(val / g.pres);
+      return g.startTime + tl;
+    }
   }
   return null;
 }
@@ -552,16 +574,21 @@ function doLookup() {
   const inlet = totalInlet(t);
 
   // Result bar
-  document.getElementById('val_time').textContent  = t.toFixed(1) + ' s';
-  document.getElementById('val_flow').textContent  = flow.toFixed(4) + ' kg/s';
-  document.getElementById('val_flood').textContent = flood.toFixed(2) + ' %';
-  document.getElementById('val_mass').textContent  = mass.toFixed(2) + ' kg';
-  document.getElementById('val_inlet').textContent = inlet.toFixed(2) + ' barg';
-  document.getElementById('val_nozzle').textContent= inlet.toFixed(2) + ' barg';
+  const gi = parseInt(document.getElementById('lookupGroup').value) || 0;
+  const selGroup = groups[gi];
+  const cylPresVal = selGroup ? (groupPres(selGroup, t, STATE.F) ?? 0) : 0;
+
+  document.getElementById('val_time').textContent    = t.toFixed(1) + ' s';
+  document.getElementById('val_flow').textContent    = flow.toFixed(4) + ' kg/s';
+  document.getElementById('val_flood').textContent   = flood.toFixed(2) + ' %';
+  document.getElementById('val_mass').textContent    = mass.toFixed(2) + ' kg';
+  document.getElementById('val_inlet').textContent   = inlet.toFixed(2) + ' barg';
+  document.getElementById('val_nozzle').textContent  = inlet.toFixed(2) + ' barg';
+  document.getElementById('val_cylPres').textContent = cylPresVal.toFixed(1) + ' barg';
 
   document.getElementById('resultBar').classList.add('show');
   document.querySelectorAll('.result-item').forEach(el => el.classList.remove('highlight'));
-  const resKey = { time:'res_time', flood:'res_flood', mass:'res_mass' }[param];
+  const resKey = { time:'res_time', flood:'res_flood', mass:'res_mass', cylPres:'res_cylPres' }[param];
   if (resKey) document.getElementById(resKey).classList.add('highlight');
 
   // Place markers on combined charts (last dataset is the marker)
@@ -576,13 +603,14 @@ function doLookup() {
   setLastMarker('c_inlet', t, inlet);
   setLastMarker('c_nozzle',t, inlet);
 
-  // Pressure markers: one per group
+  // Pressure markers: highlight only the selected group (or all for non-pressure lookups)
   const presDs = charts['c_pres'].data.datasets;
-  // presMarkers start after presDatasets.length + groups.length (start markers)
   const markerOffset = groups.length + groups.length; // presDatasets + startMarkers
   groups.forEach((g, i) => {
     const gPres = groupPres(g, t, STATE.F) ?? 0;
-    presDs[markerOffset + i].data = [{ x: t, y: gPres }];
+    // For cylPres lookup, only mark the selected group; for others, mark all
+    const show = (param !== 'cylPres') || (i === gi);
+    presDs[markerOffset + i].data = show ? [{ x: t, y: gPres }] : [];
   });
   charts['c_pres'].update('none');
 }
