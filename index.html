@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IG-541 Staggered Discharge v2</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: Arial, sans-serif; background: #f0f2f5; color: #222; }
+
+header { background: #1a3a5c; color: #fff; padding: 16px 24px; }
+header h1 { font-size: 1.4rem; }
+header p { font-size: 0.85rem; opacity: 0.8; margin-top: 4px; }
+
+.panel { background: #fff; padding: 20px 24px; border-bottom: 1px solid #ddd; }
+.panel h2 { font-size: 1rem; color: #1a3a5c; margin-bottom: 14px; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; }
+
+.global-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; margin-bottom: 20px; }
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field label { font-size: 0.78rem; font-weight: bold; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+.field input, .field select { padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem; width: 100%; }
+.field input:focus, .field select:focus { outline: none; border-color: #1a3a5c; }
+.field small { font-size: 0.72rem; color: #888; }
+.field.w120 { min-width: 120px; max-width: 140px; }
+.field.w160 { min-width: 160px; max-width: 200px; }
+
+/* Groups table */
+.groups-header {
+  display: grid;
+  grid-template-columns: 36px 130px 100px 100px 100px 110px 1fr 40px;
+  gap: 8px; padding: 6px 8px; background: #f4f6f8;
+  border-radius: 6px 6px 0 0; border: 1px solid #ddd;
+  font-size: 0.72rem; font-weight: bold; color: #555;
+  text-transform: uppercase; letter-spacing: 0.03em;
+}
+.group-row {
+  display: grid;
+  grid-template-columns: 36px 130px 100px 100px 100px 110px 1fr 40px;
+  gap: 8px; padding: 8px; border: 1px solid #ddd; border-top: none;
+  align-items: center; background: #fff;
+}
+.group-row:last-of-type { border-radius: 0 0 6px 6px; }
+.group-row input { padding: 6px 8px; border: 1px solid #ccc; border-radius: 5px; font-size: 0.88rem; width: 100%; }
+.group-row input:focus { outline: none; border-color: #1a3a5c; }
+.color-dot { width: 24px; height: 24px; border-radius: 50%; margin: 0 auto; border: 2px solid rgba(0,0,0,0.15); }
+.remove-btn { background: none; border: none; cursor: pointer; font-size: 1.2rem; color: #c0392b; padding: 0; line-height: 1; }
+.remove-btn:hover { color: #922b21; }
+
+.btn-row { display: flex; gap: 10px; margin-top: 14px; align-items: center; }
+button.primary { padding: 9px 22px; background: #1a3a5c; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.95rem; }
+button.primary:hover { background: #2a5080; }
+button.add-btn { padding: 8px 16px; background: #27ae60; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+button.add-btn:hover { background: #1e8449; }
+button.secondary { padding: 9px 16px; background: #6c757d; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem; }
+button.secondary:hover { background: #5a6268; }
+
+/* ── Lookup bar ── */
+.lookup-bar { background: #fff; padding: 16px 24px; border-bottom: 1px solid #ddd; }
+.lookup-bar h2 { font-size: 1rem; color: #1a3a5c; margin-bottom: 12px; border-bottom: 2px solid #1a3a5c; padding-bottom: 6px; }
+.lookup-inner { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+.lookup-field { display: flex; flex-direction: column; gap: 5px; min-width: 200px; }
+.lookup-field label { font-size: 0.78rem; font-weight: bold; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+.lookup-field select, .lookup-field input { padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem; }
+.lookup-field select:focus, .lookup-field input:focus { outline: none; border-color: #1a3a5c; }
+
+/* ── Result bar ── */
+.result-bar { background: #e8f4fd; border-left: 4px solid #1a3a5c; padding: 12px 24px; display: none; flex-wrap: wrap; gap: 12px; }
+.result-bar.show { display: flex; }
+.result-item { background: #fff; border-radius: 8px; padding: 10px 16px; min-width: 145px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.r-label { font-size: 0.72rem; color: #666; margin-bottom: 3px; text-transform: uppercase; }
+.r-value { font-size: 1.05rem; font-weight: bold; color: #1a3a5c; }
+.result-item.highlight { border: 2px solid #e07b00; }
+.result-item.highlight .r-value { color: #e07b00; }
+
+/* ── Summary ── */
+.summary { display: flex; flex-wrap: wrap; gap: 12px; padding: 16px 24px; background: #eaf3fb; border-bottom: 1px solid #cce0f0; }
+.summary-card { background: #fff; border-radius: 8px; padding: 10px 18px; min-width: 140px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+.s-label { font-size: 0.72rem; color: #666; margin-bottom: 3px; text-transform: uppercase; }
+.s-value { font-size: 1.1rem; font-weight: bold; color: #1a3a5c; }
+.ok .s-value { color: #1a7a3c; }
+.warn .s-value { color: #c0392b; }
+
+/* ── Legend ── */
+.legend-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; padding: 10px 24px; background: #fff; border-bottom: 1px solid #eee; }
+.legend-item { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; }
+.legend-line { width: 28px; height: 3px; border-radius: 2px; }
+
+/* ── Graphs ── */
+.graphs { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 20px; padding: 24px; }
+.chart-card { background: #fff; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); padding: 16px; }
+.chart-card h3 { font-size: 0.88rem; color: #444; margin-bottom: 10px; text-align: center; }
+.chart-wrapper { position: relative; height: 240px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>IG-541 Staggered Discharge <span style="font-size:0.85rem;opacity:0.7">v2</span></h1>
+  <p>Add cylinder groups with different start times — look up any value to read across all charts.</p>
+</header>
+
+<!-- ── CONFIGURATION ── -->
+<div class="panel">
+  <h2>Global Settings</h2>
+  <div class="global-row">
+    <div class="field w160">
+      <label>Outlet Hose Diameter [mm]</label>
+      <select id="outletDiam">
+        <option value="8">8 mm</option>
+        <option value="12">12 mm</option>
+        <option value="16">16 mm</option>
+        <option value="20">20 mm</option>
+        <option value="25">25 mm</option>
+      </select>
+      <small>Shared single outlet after tee</small>
+    </div>
+    <div class="field w120">
+      <label>Protected Volume [m³]</label>
+      <input type="number" id="volume" value="20" min="1" max="5000" step="1" />
+    </div>
+  </div>
+
+  <h2>Cylinder Groups</h2>
+  <div class="groups-header">
+    <span></span>
+    <span>Start Time [s]</span>
+    <span>Cylinders</span>
+    <span>Mass/cyl [kg]</span>
+    <span>Pressure [barg]</span>
+    <span>Group Label</span>
+    <span></span>
+    <span></span>
+  </div>
+  <div id="groupRows"></div>
+
+  <div class="btn-row">
+    <button class="add-btn" onclick="addGroup()">+ Add Group</button>
+    <button class="primary" onclick="calculate()">Calculate ▶</button>
+    <button class="secondary" onclick="resetAll()">Reset</button>
+  </div>
+</div>
+
+<!-- ── LOOKUP ── -->
+<div class="lookup-bar">
+  <h2>Look Up a Value</h2>
+  <div class="lookup-inner">
+    <div class="lookup-field">
+      <label>Input Parameter</label>
+      <select id="lookupParam" onchange="onParamChange()">
+        <option value="time">Time [s]</option>
+        <option value="flood">Flooding Ratio [%]</option>
+        <option value="mass">Total Mass Remaining [kg]</option>
+      </select>
+    </div>
+    <div class="lookup-field">
+      <label id="lookupLabel">Value</label>
+      <input type="number" id="lookupValue" placeholder="Enter a value…" step="any"
+             onkeydown="if(event.key==='Enter') doLookup()" />
+    </div>
+    <div style="display:flex;gap:10px;align-items:flex-end">
+      <button class="primary" onclick="doLookup()">Look up ▶</button>
+      <button class="secondary" onclick="clearLookup()">Clear</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── RESULT BAR ── -->
+<div class="result-bar" id="resultBar">
+  <div class="result-item" id="res_time">
+    <div class="r-label">Time</div><div class="r-value" id="val_time">—</div>
+  </div>
+  <div class="result-item" id="res_flow">
+    <div class="r-label">Outlet Flow</div><div class="r-value" id="val_flow">—</div>
+  </div>
+  <div class="result-item" id="res_flood">
+    <div class="r-label">Flooding Ratio</div><div class="r-value" id="val_flood">—</div>
+  </div>
+  <div class="result-item" id="res_mass">
+    <div class="r-label">Mass Remaining</div><div class="r-value" id="val_mass">—</div>
+  </div>
+  <div class="result-item" id="res_inlet">
+    <div class="r-label">Pipe Inlet</div><div class="r-value" id="val_inlet">—</div>
+  </div>
+  <div class="result-item" id="res_nozzle">
+    <div class="r-label">Nozzle Pressure</div><div class="r-value" id="val_nozzle">—</div>
+  </div>
+</div>
+
+<!-- ── SUMMARY ── -->
+<div class="summary" id="summary" style="display:none"></div>
+<div class="legend-row" id="legendRow" style="display:none"></div>
+
+<!-- ── GRAPHS ── -->
+<div class="graphs">
+  <div class="chart-card"><h3>Pipe / Outlet Mass Flow [kg/s]</h3><div class="chart-wrapper"><canvas id="c_flow"></canvas></div></div>
+  <div class="chart-card"><h3>Flooding Ratio [%]</h3><div class="chart-wrapper"><canvas id="c_flood"></canvas></div></div>
+  <div class="chart-card"><h3>Cylinder Pressure [barg] — per group</h3><div class="chart-wrapper"><canvas id="c_pres"></canvas></div></div>
+  <div class="chart-card"><h3>IG-541 Mass Remaining [kg] — total</h3><div class="chart-wrapper"><canvas id="c_mass"></canvas></div></div>
+  <div class="chart-card"><h3>Pipe System Inlet [barg]</h3><div class="chart-wrapper"><canvas id="c_inlet"></canvas></div></div>
+  <div class="chart-card"><h3>Nozzle Pressure [barg]</h3><div class="chart-wrapper"><canvas id="c_nozzle"></canvas></div></div>
+</div>
+
+<script>
+// ── Constants ──
+const BASE = {
+  mass0: 33, pres0: 300, flow0: 1.6, pipe0: 52, nozzle0: 52,
+  T_base: 90,
+  k_mass: 0.0395, k_flow: 0.048, k_pres: 0.044, k_pipe: 0.063, k_nozzle: 0.063,
+};
+const rhoIG541 = 1.66;
+const PALETTE = ['#2563eb','#e07b00','#16a34a','#dc2626','#7c3aed','#0891b2','#db2777','#92400e','#065f46','#1e3a5f'];
+
+let groups = [];
+let groupId = 0;
+let STATE = { F: 1, volume: 20, tMax: 90, tEnd: 110 }; // updated on calculate()
+
+// ── Math helpers ──
+function outletF(d) { return (d / 8) ** 2; }
+function dischargeTime(N, d) { return BASE.T_base * N / outletF(d); }
+function linspace(a, b, n) { const r=[]; for(let i=0;i<n;i++) r.push(a+(b-a)*i/(n-1)); return r; }
+function massToFlooding(mKg, vol) {
+  const vGas = mKg / rhoIG541;
+  return Math.min(100, (vGas / (vol + vGas)) * 100);
+}
+
+// ── Per-group curves ──
+function groupFlow(g, t, F) {
+  const tl = t - g.startTime;
+  if (tl < 0) return 0;
+  const ratio = g.nCyl / F;
+  if (tl > BASE.T_base * ratio) return 0;
+  return F * BASE.flow0 * Math.exp(-BASE.k_flow * tl / ratio);
+}
+function groupPres(g, t, F) {
+  const tl = t - g.startTime;
+  if (tl < 0) return null;
+  const ratio = g.nCyl / F;
+  if (tl > BASE.T_base * ratio) return 0;
+  return g.pres * Math.exp(-BASE.k_pres * tl / ratio);
+}
+function groupMassRemaining(g, t, F) {
+  const tl = t - g.startTime;
+  if (tl < 0) return 0;
+  const ratio = g.nCyl / F;
+  if (tl > BASE.T_base * ratio) return 0;
+  const scaledK = BASE.k_mass * (BASE.mass0 / g.massPerCyl);
+  return g.nCyl * g.massPerCyl * Math.exp(-scaledK * tl / ratio);
+}
+function groupMassDelivered(g, t, F) {
+  if (t < g.startTime) return 0;
+  return g.nCyl * g.massPerCyl - groupMassRemaining(g, t, F);
+}
+function groupPipeInlet(g, t, F) {
+  const tl = t - g.startTime;
+  if (tl < 0) return 0;
+  const ratio = g.nCyl / F;
+  if (tl > BASE.T_base * ratio) return 0;
+  return BASE.pipe0 * F * Math.exp(-BASE.k_pipe * tl / ratio);
+}
+
+// ── Combined totals at time t ──
+function totalFlow(t)    { return groups.reduce((s, g) => s + groupFlow(g, t, STATE.F), 0); }
+function totalMass(t)    { return groups.reduce((s, g) => s + groupMassRemaining(g, t, STATE.F), 0); }
+function totalDelivered(t){ return groups.reduce((s, g) => s + groupMassDelivered(g, t, STATE.F), 0); }
+function totalFlood(t)   { return massToFlooding(totalDelivered(t), STATE.volume); }
+function totalInlet(t)   { return groups.reduce((s, g) => s + groupPipeInlet(g, t, STATE.F), 0); }
+
+// ── Numerical bisection solver (for monotonic functions) ──
+function bisect(fn, target, tLow, tHigh, iters=60) {
+  for (let i = 0; i < iters; i++) {
+    const tMid = (tLow + tHigh) / 2;
+    const mid  = fn(tMid);
+    if (Math.abs(mid - target) < 1e-6) return tMid;
+    // If fn is increasing, swap sides accordingly
+    if ((mid < target) === (fn(tHigh) > fn(tLow))) tLow = tMid;
+    else tHigh = tMid;
+  }
+  return (tLow + tHigh) / 2;
+}
+
+// ── Group management ──
+function addGroup(startTime=0, nCyl=1, massPerCyl=33, pres=300, label='') {
+  const id = groupId++;
+  const color = PALETTE[groups.length % PALETTE.length];
+  groups.push({ id, startTime, nCyl, massPerCyl, pres, color, label: label || `Group ${groups.length+1}` });
+  renderGroupRows();
+}
+function removeGroup(id) {
+  groups = groups.filter(g => g.id !== id);
+  renderGroupRows();
+}
+function renderGroupRows() {
+  const container = document.getElementById('groupRows');
+  container.innerHTML = '';
+  groups.forEach((g, idx) => {
+    const row = document.createElement('div');
+    row.className = 'group-row';
+    row.innerHTML = `
+      <div><div class="color-dot" style="background:${g.color}"></div></div>
+      <input type="number" value="${g.startTime}" min="0" step="1"
+             onchange="groups[${idx}].startTime=parseFloat(this.value)||0" />
+      <input type="number" value="${g.nCyl}" min="1" max="20" step="1"
+             onchange="groups[${idx}].nCyl=parseInt(this.value)||1" />
+      <input type="number" value="${g.massPerCyl}" min="1" step="0.5"
+             onchange="groups[${idx}].massPerCyl=parseFloat(this.value)||33" />
+      <input type="number" value="${g.pres}" min="50" max="400" step="5"
+             onchange="groups[${idx}].pres=parseFloat(this.value)||300" />
+      <input type="text" value="${g.label}" maxlength="20"
+             onchange="groups[${idx}].label=this.value" />
+      <span></span>
+      <button class="remove-btn" onclick="removeGroup(${g.id})" title="Remove">✕</button>
+    `;
+    container.appendChild(row);
+  });
+}
+
+// ── Charts ──
+const charts = {};
+const CHART_IDS = ['c_flow','c_flood','c_pres','c_mass','c_inlet','c_nozzle'];
+
+function makeChart(id, yLabel) {
+  return new Chart(document.getElementById(id).getContext('2d'), {
+    type: 'line',
+    data: { datasets: [] },
+    options: {
+      animation: false, responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: { title: items => `t = ${parseFloat(items[0].parsed.x).toFixed(1)} s` },
+          filter: item => !item.dataset.label?.startsWith('_'),
+        }
+      },
+      scales: {
+        x: { type:'linear', min:0, ticks:{stepSize:30}, title:{display:true,text:'Time [s]',font:{size:11}}, grid:{color:'#e0e0e0'} },
+        y: { min:0, grid:{color:'#e0e0e0'}, title:{display:true,text:yLabel,font:{size:10}} }
+      }
+    }
+  });
+}
+CHART_IDS.forEach(id => {
+  const labels = { c_flow:'kg/s', c_flood:'%', c_pres:'barg', c_mass:'kg', c_inlet:'barg', c_nozzle:'barg' };
+  charts[id] = makeChart(id, labels[id]);
+});
+// Pressure chart gets a per-group colour legend; all others stay legend-off
+charts['c_pres'].options.plugins.legend.display = true;
+charts['c_pres'].options.plugins.legend.labels = {
+  filter: item => !item.text.startsWith('_'),
+  boxWidth: 14,
+  font: { size: 11 },
+};
+charts['c_pres'].update('none');
+
+function setChartData(id, datasets, xMax, yMax) {
+  const c = charts[id];
+  c.data.datasets = datasets;
+  c.options.scales.x.max = xMax;
+  c.options.scales.y.max = yMax;
+  c.update('none');
+}
+
+// ── Calculate ──
+function calculate() {
+  if (groups.length === 0) { alert('Add at least one cylinder group.'); return; }
+
+  const diam   = parseInt(document.getElementById('outletDiam').value) || 8;
+  const volume = parseFloat(document.getElementById('volume').value) || 20;
+  const F      = outletF(diam);
+
+  const tEnds = groups.map(g => g.startTime + dischargeTime(g.nCyl, diam));
+  const tMax  = Math.max(...tEnds);
+  const tEnd  = tMax * 1.15 + 10;
+  STATE = { F, volume, tMax, tEnd, diam };
+
+  const T    = linspace(0, tEnd, 500);
+  const xMax = Math.ceil(tEnd / 30) * 30;
+
+  const flowData   = T.map(t => ({ x: t, y: totalFlow(t) }));
+  const floodData  = T.map(t => ({ x: t, y: totalFlood(t) }));
+  const massData   = T.map(t => ({ x: t, y: totalMass(t) }));
+  const inletData  = T.map(t => ({ x: t, y: totalInlet(t) }));
+
+  const combinedStyle = { borderColor:'#1a3a5c', borderWidth:2.5, pointRadius:0, tension:0.3, fill:false };
+  const markerStyle   = (color) => ({
+    borderColor: color, borderWidth:2, pointRadius:8,
+    pointBackgroundColor: color, pointBorderColor:'#fff', pointBorderWidth:2,
+    showLine: false, label: '_marker',
+  });
+
+  const peakFlow  = Math.max(...flowData.map(d => d.y));
+  const peakInlet = Math.max(...inletData.map(d => d.y));
+  const totalM0   = groups.reduce((s, g) => s + g.nCyl * g.massPerCyl, 0);
+  const maxPres   = Math.max(...groups.map(g => g.pres));
+
+  // Start-time vertical markers (one per group colour)
+  function startMarker(g, yTop) {
+    return { label:`_start_${g.id}`, data:[{x:g.startTime,y:0},{x:g.startTime,y:yTop}],
+      borderColor:g.color, borderWidth:1.5, borderDash:[5,4], pointRadius:0, tension:0, fill:false };
+  }
+
+  // Flow markers
+  const fmYTop = peakFlow * 1.35 || 2;
+  setChartData('c_flow', [
+    { label:'Outlet Flow', data:flowData, ...combinedStyle },
+    ...groups.map(g => startMarker(g, fmYTop)),
+    { ...markerStyle('#1a3a5c'), data:[] },
+  ], xMax, Math.ceil(fmYTop/0.5)*0.5);
+
+  setChartData('c_flood', [
+    { label:'Flooding Ratio', data:floodData, ...combinedStyle },
+    { ...markerStyle('#1a3a5c'), data:[] },
+  ], xMax, 100);
+
+  // Pressure — per group lines + start markers
+  const presDatasets = groups.map(g => ({
+    label: g.label, borderColor:g.color, borderWidth:2.5, pointRadius:0, tension:0.3, fill:false,
+    spanGaps: false,
+    data: T.filter(t => t >= g.startTime).map(t => ({ x: t, y: groupPres(g, t, F) ?? 0 })),
+  }));
+  // Per-group pressure markers (one scatter dataset per group, initially empty)
+  const presMarkers = groups.map(g => ({ ...markerStyle(g.color), data:[], label:`_pm_${g.id}` }));
+  setChartData('c_pres', [
+    ...presDatasets,
+    ...groups.map(g => startMarker(g, maxPres * 1.1)),
+    ...presMarkers,
+  ], xMax, Math.ceil(maxPres*1.1/50)*50);
+
+  setChartData('c_mass', [
+    { label:'Mass Remaining', data:massData, ...combinedStyle },
+    { ...markerStyle('#1a3a5c'), data:[] },
+  ], xMax, Math.ceil(totalM0*1.1/10)*10);
+
+  setChartData('c_inlet', [
+    { label:'Pipe Inlet', data:inletData, ...combinedStyle },
+    { ...markerStyle('#1a3a5c'), data:[] },
+  ], xMax, Math.ceil(peakInlet*1.25/10)*10 || 60);
+
+  setChartData('c_nozzle', [
+    { label:'Nozzle Pressure', data:inletData.map(d=>({...d})), ...combinedStyle },
+    { ...markerStyle('#1a3a5c'), data:[] },
+  ], xMax, Math.ceil(peakInlet*1.25/10)*10 || 60);
+
+  // Summary
+  const finalFlood = massToFlooding(totalM0, volume);
+  const ok = finalFlood >= 34;
+  document.getElementById('summary').style.display = 'flex';
+  document.getElementById('summary').innerHTML = `
+    <div class="summary-card"><div class="s-label">Groups</div><div class="s-value">${groups.length}</div></div>
+    <div class="summary-card"><div class="s-label">Total Gas Mass</div><div class="s-value">${totalM0.toFixed(1)} kg</div></div>
+    <div class="summary-card"><div class="s-label">Last Group Ends</div><div class="s-value">${tMax.toFixed(0)} s &nbsp;(${(tMax/60).toFixed(1)} min)</div></div>
+    <div class="summary-card"><div class="s-label">Peak Outlet Flow</div><div class="s-value">${peakFlow.toFixed(2)} kg/s</div></div>
+    <div class="summary-card ${ok?'ok':'warn'}"><div class="s-label">Final Flooding Ratio</div><div class="s-value">${finalFlood.toFixed(1)} %</div></div>
+    <div class="summary-card ${ok?'ok':'warn'}"><div class="s-label">Design Conc. 34 %</div><div class="s-value">${ok?'✔ Achieved':'✘ Not reached'}</div></div>
+    <div class="summary-card"><div class="s-label">Outlet</div><div class="s-value">${STATE.diam} mm &nbsp;(${F.toFixed(2)}× cap.)</div></div>
+  `;
+
+  // Legend
+  const lr = document.getElementById('legendRow');
+  lr.style.display = 'flex';
+  lr.innerHTML = '<strong style="font-size:0.82rem">Groups:</strong>';
+  groups.forEach(g => {
+    const Te = g.startTime + dischargeTime(g.nCyl, diam);
+    const el = document.createElement('div');
+    el.className = 'legend-item';
+    el.innerHTML = `<div class="legend-line" style="background:${g.color}"></div>
+      <span><b>${g.label}</b> — t=${g.startTime} s, ${g.nCyl} cyl × ${g.massPerCyl} kg, ends ~${Te.toFixed(0)} s</span>`;
+    lr.appendChild(el);
+  });
+
+  clearLookup();
+}
+
+// ── Lookup ──
+const PARAM_LABELS = {
+  time:  'Time (0 – ? s)',
+  flood: 'Flooding Ratio (0 – 100 %)',
+  mass:  'Total Mass Remaining (kg)',
+};
+
+function onParamChange() {
+  const p = document.getElementById('lookupParam').value;
+  document.getElementById('lookupLabel').textContent = PARAM_LABELS[p] || 'Value';
+  document.getElementById('lookupValue').value = '';
+  clearLookup();
+}
+
+function solveT(param, val) {
+  const { tEnd } = STATE;
+  switch(param) {
+    case 'time':
+      return Math.max(0, Math.min(tEnd, val));
+    case 'flood':
+      // monotonically increasing; flood(0)=0, flood(tEnd)=max
+      if (val <= 0) return 0;
+      if (val >= totalFlood(tEnd)) return null; // unreachable
+      return bisect(totalFlood, val, 0, tEnd);
+    case 'mass':
+      // monotonically decreasing; mass(0)=totalM0, mass(tEnd)≈0
+      const m0 = groups.reduce((s,g) => s + g.nCyl*g.massPerCyl, 0);
+      if (val >= m0) return 0;
+      if (val <= 0)  return tEnd;
+      return bisect(totalMass, val, 0, tEnd);
+  }
+  return null;
+}
+
+function doLookup() {
+  if (groups.length === 0) { alert('Run Calculate first.'); return; }
+  const param = document.getElementById('lookupParam').value;
+  const raw   = parseFloat(document.getElementById('lookupValue').value);
+  if (isNaN(raw)) { alert('Please enter a numeric value.'); return; }
+
+  const t = solveT(param, raw);
+  if (t == null || isNaN(t)) { alert('Value is out of range for the current configuration.'); return; }
+
+  // Evaluate all totals at t
+  const flow  = totalFlow(t);
+  const flood = totalFlood(t);
+  const mass  = totalMass(t);
+  const inlet = totalInlet(t);
+
+  // Result bar
+  document.getElementById('val_time').textContent  = t.toFixed(1) + ' s';
+  document.getElementById('val_flow').textContent  = flow.toFixed(4) + ' kg/s';
+  document.getElementById('val_flood').textContent = flood.toFixed(2) + ' %';
+  document.getElementById('val_mass').textContent  = mass.toFixed(2) + ' kg';
+  document.getElementById('val_inlet').textContent = inlet.toFixed(2) + ' barg';
+  document.getElementById('val_nozzle').textContent= inlet.toFixed(2) + ' barg';
+
+  document.getElementById('resultBar').classList.add('show');
+  document.querySelectorAll('.result-item').forEach(el => el.classList.remove('highlight'));
+  const resKey = { time:'res_time', flood:'res_flood', mass:'res_mass' }[param];
+  if (resKey) document.getElementById(resKey).classList.add('highlight');
+
+  // Place markers on combined charts (last dataset is the marker)
+  function setLastMarker(chartId, x, y) {
+    const ds = charts[chartId].data.datasets;
+    ds[ds.length - 1].data = [{ x, y }];
+    charts[chartId].update('none');
+  }
+  setLastMarker('c_flow',  t, flow);
+  setLastMarker('c_flood', t, flood);
+  setLastMarker('c_mass',  t, mass);
+  setLastMarker('c_inlet', t, inlet);
+  setLastMarker('c_nozzle',t, inlet);
+
+  // Pressure markers: one per group
+  const presDs = charts['c_pres'].data.datasets;
+  // presMarkers start after presDatasets.length + groups.length (start markers)
+  const markerOffset = groups.length + groups.length; // presDatasets + startMarkers
+  groups.forEach((g, i) => {
+    const gPres = groupPres(g, t, STATE.F) ?? 0;
+    presDs[markerOffset + i].data = [{ x: t, y: gPres }];
+  });
+  charts['c_pres'].update('none');
+}
+
+function clearLookup() {
+  // Clear all marker datasets
+  CHART_IDS.forEach(id => {
+    const ds = charts[id].data.datasets;
+    // clear any datasets labelled '_marker' or '_pm_*'
+    ds.forEach(d => { if (d.label === '_marker' || d.label?.startsWith('_pm_')) d.data = []; });
+    charts[id].update('none');
+  });
+  document.getElementById('resultBar').classList.remove('show');
+  document.querySelectorAll('.result-item').forEach(el => el.classList.remove('highlight'));
+}
+
+function resetAll() {
+  groups = []; groupId = 0;
+  renderGroupRows();
+  CHART_IDS.forEach(id => { charts[id].data.datasets = []; charts[id].update('none'); });
+  document.getElementById('summary').style.display = 'none';
+  document.getElementById('legendRow').style.display = 'none';
+  document.getElementById('resultBar').classList.remove('show');
+}
+
+// ── Initial example ──
+addGroup(0, 1, 33, 300, 'Group 1');
+calculate();
+</script>
+</body>
+</html>
